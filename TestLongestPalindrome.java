@@ -5,6 +5,7 @@ import static org.junit.Assert.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -52,9 +53,7 @@ public class TestLongestPalindrome {
 		 */
 		final List<Node[]> suffixTable;
 		
-		final Map<Node, Integer> depthMap;
-		
-		final Map<Node, TarjanOfflineData> dataMap;
+		final Map<Node, NodeData> dataMap;
 		
 		public LongestCommonPrefix(String s1, String s2) {
 			String[] s = new String[]{s1, s2};
@@ -64,51 +63,53 @@ public class TestLongestPalindrome {
 			int[] endMarkerPos = new int[]{0, s[0].length() + 1, sb.length()};
 			
 			root = SuffixTree.buildSuffixTree(sb);
-			depthMap = new HashMap<Node, Integer>();
-			dataMap = new HashMap<Node, TarjanOfflineData>();
+			dataMap = new HashMap<Node, NodeData>();
 			suffixTable = new ArrayList<Node[]>(2);
 			for (int i = 0; i < 2; ++i) {
 				suffixTable.add(new Node[endMarkerPos[i + 1] -
 				                   endMarkerPos[i]]);
 			}
-			dfs(root, 0, 0, endMarkerPos[1], suffixTable, depthMap, dataMap);
+			dfs(root, endMarkerPos[1], suffixTable, dataMap);
 		}
 		
 		// we keep it static and have output parameters so we can test it easily
-		private static void dfs(Node node, int index, int depth,
-				int firstEndMarkerPos, 
+		private static void dfs(Node root,
+				int firstEndMarkerPos,
 				List<Node[]> suffixTable,
-				Map<Node, Integer> depthMap,
-				Map<Node, TarjanOfflineData> dataMap) {
-			if (node == null)
-				return;
-			
-			TarjanOfflineData data = new TarjanOfflineData();
-			data.secondNodes = new ArrayList<Node>();
-			dataMap.put(node, data);
-			
-			// compute the depth based on the suffix length
-			int end = (node.begin > firstEndMarkerPos ? node.end 
-					: Math.min(node.end, firstEndMarkerPos));
-			depth += end - node.begin;
-			depthMap.put(node, depth);
-			
-			boolean nonLeaf = false;
-			int childIndex = 0;
-			for (Node child : node.children) {
-				nonLeaf |= (child != null);
-				dfs(child, childIndex++, depth,
-						firstEndMarkerPos, suffixTable, depthMap, dataMap);
-			}
+				Map<Node, NodeData> dataMap) {
+			LinkedList<Node> nodeStack = new LinkedList<Node>();
+			LinkedList<Integer> depthStack = new LinkedList<Integer>();
+			nodeStack.add(root); depthStack.add(0);
+			while (!nodeStack.isEmpty()) {
 
-			if (!nonLeaf && depth != 0) { // if leaf (and non-root if empty)
-				int whichString = (node.begin <= firstEndMarkerPos ? 0 : 1);
-				// we store leaves in the reverse order of depth
-				int n = suffixTable.get(whichString).length;
-				// n - (depth - 1) - 1 == n - depth
-				suffixTable.get(whichString)[n - depth] = node;
-				//System.err.println("LEAF #" + leafCnt++ + ": " + node +
-				//        " depth=" + depth + "[" + node.begin + ", " + end);
+				Node node = nodeStack.removeLast();
+				int depth = depthStack.removeLast();
+				NodeData data = new NodeData();
+				data.secondNodes = new ArrayList<Node>();
+				dataMap.put(node, data);
+
+				int end = (node.begin > firstEndMarkerPos ? node.end 
+						: Math.min(node.end, firstEndMarkerPos));
+				depth += end - node.begin;
+				data.depth = depth;
+				//System.err.println(node.depth + " " + depth);
+
+				boolean nonLeaf = false;
+				for (Node child : node.children) {
+					if (child != null) {
+						nonLeaf = true;
+						nodeStack.add(child); depthStack.add(depth);
+					}
+				}
+
+				if (!nonLeaf && depth != 0) { // if leaf (and non-root if empty)
+					int whichString = (node.begin <= firstEndMarkerPos ? 0 : 1);
+					// we store leaves in the reverse order of depth
+					int n = suffixTable.get(whichString).length;
+					// n - (depth - 1) - 1 == n - depth
+					suffixTable.get(whichString)[n - depth] = node;
+				}
+
 			}
 		}
 		
@@ -127,10 +128,11 @@ public class TestLongestPalindrome {
 			return lcaMap;
 		}
 		
-		private static class TarjanOfflineData {
+		private static class NodeData {
 			DisjointSetNode ds;
 			boolean black;
 			List<Node> secondNodes;
+			int depth;
 		}
 		
 		// Node[2] is more memory (has length)
@@ -152,30 +154,71 @@ public class TestLongestPalindrome {
 			}
 		}
 		
-		private static DisjointSetNode tarjanOfflineLCA(Node u,
-				Map<Node, TarjanOfflineData> dataMap,
+		private static void tarjanOfflineLCA(Node u,
+				Map<Node, NodeData> dataMap,
 				Map<NodePair, Node> lcaMap) {
+			// This recursive version throws StackOverflowError for deep trees
+//			DisjointSetNode uSet = new DisjointSetNode(u);
+//			TarjanOfflineData uData = dataMap.get(u);
+//			uData.ds = uSet;
+//			for (Node v : u.children) {
+//				if (v == null) continue;
+//				tarjanOfflineLCA(v, dataMap, lcaMap);
+//				DisjointSetNode.union(uSet, dataMap.get(v).ds);
+//				DisjointSetNode.find(uSet).ancestor = u;
+//			}
+//			uData.black = true;
+//			for (Node v : uData.secondNodes) {
+//				TarjanOfflineData vData = dataMap.get(v);
+//				if (vData.black) {
+//					Node lca = DisjointSetNode.find(vData.ds).ancestor;
+//					lcaMap.put(new NodePair(u, v), lca);
+//				}
+//			}
 
-			DisjointSetNode uSet = new DisjointSetNode(u);
-			TarjanOfflineData uData = dataMap.get(u);
-			uData.ds = uSet;
-			for (Node v : u.children) {
-				if (v == null) continue;
-				DisjointSetNode vSet = tarjanOfflineLCA(v, dataMap, lcaMap);
-				DisjointSetNode.union(uSet, vSet);
-				DisjointSetNode.find(uSet).ancestor = u;
-			}
-			uData.black = true;
+			// So, we implement an iterative version:
+			// - we keep track of child index which was visited last
+			// - that way we can return to u after we visit each child
+			LinkedList<Node> uStack = new LinkedList<Node>();
+			LinkedList<Integer> childStack = new LinkedList<Integer>();
+			uStack.push(u);
+			childStack.push(-1); // -1 means no children is visited yet
 			
-			for (Node v : uData.secondNodes) {
-				TarjanOfflineData vData = dataMap.get(v);
-				if (vData.black) {
-					Node lca = DisjointSetNode.find(vData.ds).ancestor;
-					lcaMap.put(new NodePair(u, v), lca);
+			while (!uStack.isEmpty()) {
+				u = uStack.removeLast();
+				NodeData uData = dataMap.get(u);
+				int childIndex = childStack.removeLast();
+				DisjointSetNode uSet;
+				if (childIndex < 0) {
+					uSet = (uData.ds = new DisjointSetNode(u));
+				} else {
+					uSet = uData.ds;
+					DisjointSetNode vSet = dataMap.get(u.children[childIndex]).ds;
+					DisjointSetNode.union(uSet, vSet);
+					DisjointSetNode.find(uSet).ancestor = u;
+				}
+				
+				boolean childrenVisited = true;
+				while (++childIndex < u.children.length) {
+					Node v = u.children[childIndex];
+					if (v == null) continue;
+					uStack.add(u); childStack.add(childIndex); // return to u
+					uStack.add(v); childStack.add(-1); // recurse on v
+					childrenVisited = false;
+					break;
+				}
+				if (!childrenVisited)
+					continue;
+				
+				uData.black = true;
+				for (Node v : uData.secondNodes) {
+					NodeData vData = dataMap.get(v);
+					if (vData.black) {
+						Node lca = DisjointSetNode.find(vData.ds).ancestor;
+						lcaMap.put(new NodePair(u, v), lca);
+					}
 				}
 			}
-			
-			return uSet;
 		}
 		
 		static class DisjointSetNode {
@@ -221,7 +264,7 @@ public class TestLongestPalindrome {
 					new LongestCommonPrefix.NodePair(nodes[0], nodes[1]));
 //			System.err.println("QRY(" + nodes[0] + "," + nodes[1] + "): "
 //					+ lcaMap.size());
-			return depthMap.get(lca);
+			return dataMap.get(lca).depth;
 		}
 	}
 	
@@ -340,6 +383,19 @@ public class TestLongestPalindrome {
 		assertLongestPali("abaacaaba", "abaacaaba"); // the longest one is the string itself
 		assertLongestPali("abaacaabaabaacaabaabaacaaba", "abaacaabaabaacaabaabaacaaba");
 	}
+	
+	static StringBuilder rep(char c, int n) {
+		StringBuilder sb = new StringBuilder(n);
+		for (int i = 0; i < n; ++i)
+			sb.append(c);
+		return sb;
+	}
+	
+	@Test
+	public void testARepeated100k() {
+		final int n = 100000;
+		StringBuilder sb = rep('a', n);
+		String longestPali = sb.toString();
+		assertLongestPali(sb.toString(), longestPali);
+	}
 }
-
-
