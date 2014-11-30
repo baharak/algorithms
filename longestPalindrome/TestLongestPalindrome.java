@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package longestPalindrome;
 
 import static org.junit.Assert.*;
@@ -20,7 +24,7 @@ public class TestLongestPalindrome {
 		  LongestCommonPrefix.Result lcpResult = lcp.preprocess(
 				  Arrays.asList(lcpQueries));
 		  assertEquals(2, lcpResult.get(lcpQueries[0])); // "cg"
-		  assertEquals(1, lcpResult.get(lcpQueries[1])) ;// "c"
+		  assertEquals(1, lcpResult.get(lcpQueries[1])); // "c"
 	}
 	
 	private static void assertLongestPali(String s, String expLongestPali) {
