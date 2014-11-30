@@ -3,7 +3,7 @@ package longestPalindrome;
 import static org.junit.Assert.*;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -11,49 +11,21 @@ import java.util.Map;
 
 import longestPalindrome.SuffixTree.Node;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 public class TestLongestPalindrome {
-	
-	static String Palindrome(String s) {
-		String longestPalindrome = null;
-		return longestPalindrome;
-	}
-	
-	
-	/**
-	 * 
-	 * @param s
-	 * @param explongestPali
-	 */
-	static void assertLongestPali(String s, String expLongestPali) {
-		//assert false, true : prevent the repetition
-		assertEquals(expLongestPali, findLongestPalindrome(s));
-	}
-	
-	static void generateString(String pattern) {
-		
-	}
-	
-	@Deprecated
-	static void printNode(SuffixTree.Node node) {
-		System.err.println("[begin=" + node.begin + ", end=" + node.end + "]");
-	}
-	
-	//static int leafCnt = 0;
-	
+
 	static class LongestCommonPrefix {
-		final Node root;
+		private final Node root;
 		/**
 		 * For each string (s1 & s2), maintain a suffix table which store
 		 * leaves in the reverse order of suffix length,
 		 * e.g. get(0)[3] is the leaf node representing the 3rd suffix of s1,
 		 * get(1)[0] is the leaf node representing the whole string s2.
 		 */
-		final List<Node[]> suffixTable;
+		private final List<Node[]> suffixTable;
 		
-		final Map<Node, NodeData> dataMap;
+		private final Map<Node, NodeData> dataMap;
 		
 		public LongestCommonPrefix(String s1, String s2) {
 			String[] s = new String[]{s1, s2};
@@ -143,7 +115,7 @@ public class TestLongestPalindrome {
 				this.second = second;
 			}
 			@Override
-			public int hashCode() {
+			public int hashCode() { // must be same if we swap first & second
 				return first.hashCode() ^ second.hashCode();
 			}
 			@Override
@@ -157,7 +129,7 @@ public class TestLongestPalindrome {
 		private static void tarjanOfflineLCA(Node u,
 				Map<Node, NodeData> dataMap,
 				Map<NodePair, Node> lcaMap) {
-			// This recursive version throws StackOverflowError for deep trees
+			// This recursive version throws StackOverflowError for deep trees:
 //			DisjointSetNode uSet = new DisjointSetNode(u);
 //			TarjanOfflineData uData = dataMap.get(u);
 //			uData.ds = uSet;
@@ -242,7 +214,6 @@ public class TestLongestPalindrome {
 					if (yRoot.rank == xRoot.rank)
 						xRoot.rank += 1;
 				}
-					
 			}
 			
 			static DisjointSetNode find(DisjointSetNode x) {
@@ -251,7 +222,6 @@ public class TestLongestPalindrome {
 				x.parent = find(x.parent); // relink to root
 				return x.parent; // return root
 			}
-			
 		}
 	
 		public int getLCADepth(int[] suffixPos,
@@ -262,8 +232,6 @@ public class TestLongestPalindrome {
 			  nodes[i] = suffixTable.get(i)[suffixPos[i]];
 			Node lca = lcaMap.get(
 					new LongestCommonPrefix.NodePair(nodes[0], nodes[1]));
-//			System.err.println("QRY(" + nodes[0] + "," + nodes[1] + "): "
-//					+ lcaMap.size());
 			return dataMap.get(lca).depth;
 		}
 	}
@@ -291,8 +259,6 @@ public class TestLongestPalindrome {
 			// check for odd-length palindrome centered at pos i in O(1)
 			int k = lcp.getLCADepth(lcaOddQuery.get(i), lcaOdd);
 			int paliLen = 2 * k - 1;
-//			System.err.println("LCP(" 
-//					+ Arrays.toString(lcaOddQuery.get(i)) + ") = " + k);
 			if (paliLen > maxPaliLen) {
 				maxPaliLen = paliLen;
 				fromAndTo[0] = i - k + 1;
@@ -310,54 +276,43 @@ public class TestLongestPalindrome {
 		return s.substring(fromAndTo[0], fromAndTo[1]);		
 	}
 	
-	@Ignore
-	public void testSuffixTreeHugeString() {
-		StringBuilder sb = new StringBuilder("acacag");
-		for (int i = 0; i < 17; ++i)
-			sb.append(sb.toString());
-		assertTrue(sb.length() > 600000);
-		String s1 = sb.toString();
-		String s2 = sb.reverse().toString();
-		SuffixTree.buildSuffixTree(s1 + '\1' + s2 + '\2');
+	// TEST CASES
+	
+	private static void assertLongestPali(String s, String expLongestPali) {
+		//assert false, true : prevent the repetition
+		assertEquals(expLongestPali, findLongestPalindrome(s));
 	}
 	
 	@Test
-	public void testSuffixTreeLeafsByDepth() {
-		String s1 = "acgat", s2 = "cgt";
-		LongestCommonPrefix lcp = new LongestCommonPrefix(s1, s2);
-	}
-	
-	@Test
-	public void testNull(){
+	public void testEmpty(){
 		assertLongestPali("", "");
 	}
 	
 	@Test
-	public void testEasy() {
+	public void testOddLength() {
+		assertLongestPali("x", "x");
 		assertLongestPali("aba", "aba");
-		//assertLongestPali("abba", "abba");
+		assertLongestPali("madamisadoctor", "madam");
 		assertLongestPali("salaabcbasala", "abcba");
+		assertLongestPali("salonisblas", "s");
+		assertEquals(findLongestPalindrome("salonisblas").length(), 1);
 	}
 	
 	@Test
-	public void testSpace() {
-		assertLongestPali("sallaaabcbaalsa", "aabcbaa"); // check for the spaces
-		assertLongestPali("madamisadoctor", "madam");
+	public void testEvenLength() {
+		assertLongestPali("salamdokhtarezibaabbasakamsdfchetori", "baab");
+		assertLongestPali("salamdokhtarezibasakamsdfchetoriabba", "abba");
+		assertLongestPali("abba", "abba");
+		assertLongestPali("moon", "oo");
+		assertLongestPali("allumnimulla", "ll");
+		assertLongestPali("22", "22");
 	}
 
 	@Test	
-	public void testSinglelong() {
-		assertLongestPali("aaabmbaaadokhtar", "aaabmbaaa");      //beginning
-		assertLongestPali("fghijaabmbaakmdafr", "aabmbaa");     //middle
-		assertLongestPali("dokhtareaaaacbbbcaa", "aacbbbcaa");  //end
-
-	}
-	
-	@Test
-	public void testSingleShort() {
-		assertLongestPali("salamdokhtarezibaabbasakamsdfchetori", "baab"); //beginning
-		assertLongestPali("salamdokhtarezibasakamsdfchetoriabba", "abba"); //middle
-		assertLongestPali("salamabbadokhtarezibasakamsdfchetori", "abba"); //end		
+	public void testPosition() {
+		assertLongestPali("aaabmbaaadokhtar", "aaabmbaaa"); 	//beginning
+		assertLongestPali("fghijaabmbaakmdafr", "aabmbaa"); 	//middle
+		assertLongestPali("dokhtareaaaacbbbcaa", "aacbbbcaa");	//end
 	}
 	
 	@Test
@@ -366,30 +321,65 @@ public class TestLongestPalindrome {
 		assertLongestPali("madamisanun", "madam");
 		assertLongestPali("salamdokhtarezibabcbasakamsdfabbachetori", "abcba");	
 		assertLongestPali("salamabbadokhtarezibabcbasakamsdfchetori", "abcba");		
-		assertLongestPali("theracecarhasaraceradartocheckwhereisracecaring", "racecar");
+		assertLongestPali("theracecarhasaraceradartocheckwhereisracecaring",
+				"racecar");
 		assertLongestPali("radarofthetheracecarcheckswhereishe", "racecar");
 	}
 		
 	@Test
 	public void testOrder() {
-		assertLongestPali("abscdxxxxxxxxxxxxxasdfsbbbbbbbbdfyyy", "xxxxxxxxxxxxx"); //beginning
-		assertLongestPali("abcdfe3333adsfjsdf22674903454444444asdfjladsfjadsf11yy", "4444444"); //middle
-		assertLongestPali("abyyysdfsd22222fjdsfxxxxxxxx", "xxxxxxxx");	//end		 
+		assertLongestPali("abscdxxxxxxxxxxxxxasdfsbbbbbbbbdfyyy",
+				"xxxxxxxxxxxxx"); //beginning
+		assertLongestPali(
+				"abcdfe3333adsfjsdf22674903454444444asdfjladsfjadsf11yy",
+				"4444444"); //middle
+		assertLongestPali("abyyysdfsd22222fjdsfxxxxxxxx", "xxxxxxxx"); //end		 
 	}
 	
 	@Test 
 	public void testOverlap() {
 		assertLongestPali("acabacab", "acabaca");
-		assertLongestPali("abaacaaba", "abaacaaba"); // the longest one is the string itself
-		assertLongestPali("abaacaabaabaacaabaabaacaaba", "abaacaabaabaacaabaabaacaaba");
+		assertLongestPali("m4321m1234", "4321m1234");
+		assertLongestPali("abbacabbaaabb", "abbacabba");
+		assertLongestPali("bbaaabbacabba", "abbacabba");
 	}
 	
-	static StringBuilder rep(char c, int n) {
+	private static StringBuilder rep(char c, int n) {
 		StringBuilder sb = new StringBuilder(n);
-		for (int i = 0; i < n; ++i)
+		for (int i = 0; i < n; ++i) 
 			sb.append(c);
 		return sb;
 	}
+	
+	private static StringBuilder concat(CharSequence... charSeqs) {
+		int len = 0;
+		for (CharSequence charSeq : charSeqs)
+			len += charSeq.length();
+		StringBuilder sb = new StringBuilder(len);
+		for (CharSequence charSeq : charSeqs)
+			sb.append(charSeq);
+		return sb;
+	}
+	
+	private static StringBuilder cycleLetters(int n) {
+		StringBuilder sb = new StringBuilder(n);
+		char letter = 'a';
+		for (int i = 0; i < n; ++i) {
+			sb.append(letter);
+			if (++letter > 'z') letter = 'a';
+		}
+		return sb;
+	}
+	
+	private static StringBuilder pali(CharSequence charSeq) {
+		StringBuilder sb = new StringBuilder(charSeq.length() * 2);
+		sb.append(charSeq).reverse().append(charSeq);
+		return sb;
+	}
+	
+	// Tests in which there is a long palindrom of repeated character;
+	// this creates a deep suffix tree for which we need non-recursive algorithm
+	// (the depth of the suffix tree is O(n))
 	
 	@Test
 	public void testARepeated100k() {
@@ -397,5 +387,44 @@ public class TestLongestPalindrome {
 		StringBuilder sb = rep('a', n);
 		String longestPali = sb.toString();
 		assertLongestPali(sb.toString(), longestPali);
+	}
+
+	@Test
+	public void testARepeated33kOf100k() {
+		final int n = 33333;
+		StringBuilder sb = rep('a', n + 1);
+		String longestPali = sb.toString();
+		assertLongestPali(concat(rep('c', n), sb, rep('t', n)).toString(),
+				longestPali); // ??? aaa ???
+		assertLongestPali(sb.append(rep('b', n)).append(rep('c', n)).toString(),
+				longestPali); // aaa ??? ???
+		assertLongestPali(sb.reverse().toString(), longestPali); // ??? ??? aaa
+	}
+	
+	// Tests in which the longest palindrome is in the middle of the
+	// first or second half of the long string (so that both algorithm that
+	// check from the middle or from begin/end is slow):
+	
+	@Test
+	public void testLongPaliAt2ndTo3rdSixthOf100k() {
+		// ??? a-z...z-a ??? ??? ??? ???
+		final int n = 100000;
+		final int nOver6 = n / 6;
+		StringBuilder longestPali = pali(cycleLetters(nOver6 / 2 + 1));
+		StringBuilder sb = concat(
+				rep('1', nOver6), longestPali, rep('3', nOver6),
+				rep('4', nOver6), rep('5', nOver6), rep('6', nOver6));
+		assertLongestPali(sb.toString(), longestPali.toString());
+	}
+	
+	@Test
+	public void testShortPaliAt3FourthsOf100k() {
+		final int n = 100000;
+		final int nOver4 = n / 4;
+		StringBuilder longestPali = pali(rep('x', 7));
+		StringBuilder sb = concat( // ??? ??? ??? xxxxxxx ???
+				cycleLetters(3 * nOver4), longestPali, cycleLetters(nOver4));
+		assertTrue(sb.length() > n);
+		assertLongestPali(sb.toString(), longestPali.toString());
 	}
 }
