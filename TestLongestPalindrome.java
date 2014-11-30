@@ -2,10 +2,11 @@ package longestPalindrome;
 
 import static org.junit.Assert.*;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
-
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -15,7 +16,28 @@ import org.junit.Test;
 
 public class TestLongestPalindrome {
 
+	/**
+	 * Computes common prefix of suffixes of two strings in O(N1 + N2 + M),
+	 * N1 & N2 are length of strings and M is the number of LCP queries.
+	 *
+	 * <pre>
+	 * LongestCommonPrefix lcp = new LongestCommonPrefix("acgat", "cgt");
+	 * int[][] lcpQueries = new int[][]{
+	 *     {1, 0}, // get common prefix length of "cgat" and "cgt"
+	 *     {2, 1}, // get common prefix length of "gat" and "gt"
+	 * };
+	 * LongestCommonPrefix.Result lcpResult = lcp.preprocess(
+	 *     Arrays.asList(lcpQueries));
+	 * lcpResult.get(lcpQueries[0]) // returns 2 (common prefix is "cg")
+	 * lcpResult.get(lcpQueries[1]) // returns 1 (common prefix is "c")
+	 * </pre>
+	 * @author bsaberid
+	 *
+	 */
 	static class LongestCommonPrefix {
+		/**
+		 * Root of suffix tree
+		 */
 		private final Node root;
 		/**
 		 * For each string (s1 & s2), maintain a suffix table which store
@@ -24,53 +46,58 @@ public class TestLongestPalindrome {
 		 * get(1)[0] is the leaf node representing the whole string s2.
 		 */
 		private final List<Node[]> suffixTable;
-		
-		private final Map<Node, NodeData> dataMap;
+		/**
+		 * Map which stores suffix length for each node in suffix tree
+		 */
+		private final Map<Node, Integer> depthMap;
 		
 		public LongestCommonPrefix(String s1, String s2) {
-			String[] s = new String[]{s1, s2};
 			StringBuilder sb = new StringBuilder(
-					s[0].length() + s[1].length() + 2);
-			sb.append(s[0]).append('\1').append(s[1]).append('\2');
-			int[] endMarkerPos = new int[]{0, s[0].length() + 1, sb.length()};
+					s1.length() + s2.length() + 2);
+			sb.append(s1).append('\1').append(s2).append('\2');
+			int[] endMarkerPos = new int[]{0, s1.length() + 1, sb.length()};
 			
 			root = SuffixTree.buildSuffixTree(sb);
-			dataMap = new HashMap<Node, NodeData>();
+			depthMap = new HashMap<Node, Integer>();
 			suffixTable = new ArrayList<Node[]>(2);
 			for (int i = 0; i < 2; ++i) {
 				suffixTable.add(new Node[endMarkerPos[i + 1] -
 				                   endMarkerPos[i]]);
 			}
-			dfs(root, endMarkerPos[1], suffixTable, dataMap);
+			dfs(root, endMarkerPos[1], suffixTable, depthMap);
 		}
 		
+		private static final class NodeAndInt {
+			final Node node; final int i;
+			NodeAndInt(Node n, int i) {
+				this.node = n;
+				this.i = i;
+			}
+		}
+
 		// we keep it static and have output parameters so we can test it easily
 		private static void dfs(Node root,
 				int firstEndMarkerPos,
 				List<Node[]> suffixTable,
-				Map<Node, NodeData> dataMap) {
-			LinkedList<Node> nodeStack = new LinkedList<Node>();
-			LinkedList<Integer> depthStack = new LinkedList<Integer>();
-			nodeStack.add(root); depthStack.add(0);
-			while (!nodeStack.isEmpty()) {
+				Map<Node, Integer> depthMap) {
+			ArrayDeque<NodeAndInt> stack = new ArrayDeque<NodeAndInt>();
+			stack.add(new NodeAndInt(root, 0));
+			while (!stack.isEmpty()) {
+				NodeAndInt ni = stack.pollFirst();
+				Node node = ni.node; int depth = ni.i;
 
-				Node node = nodeStack.removeLast();
-				int depth = depthStack.removeLast();
-				NodeData data = new NodeData();
-				data.secondNodes = new ArrayList<Node>();
-				dataMap.put(node, data);
-
+				// compute the suffix length for each node in depthMap
+				// (the SuffixTree.Node depth is node's depth in the tree) 
 				int end = (node.begin > firstEndMarkerPos ? node.end 
 						: Math.min(node.end, firstEndMarkerPos));
 				depth += end - node.begin;
-				data.depth = depth;
-				//System.err.println(node.depth + " " + depth);
+				depthMap.put(node, depth);
 
 				boolean nonLeaf = false;
 				for (Node child : node.children) {
 					if (child != null) {
 						nonLeaf = true;
-						nodeStack.add(child); depthStack.add(depth);
+						stack.addFirst(new NodeAndInt(child, depth));
 					}
 				}
 
@@ -81,11 +108,17 @@ public class TestLongestPalindrome {
 					// n - (depth - 1) - 1 == n - depth
 					suffixTable.get(whichString)[n - depth] = node;
 				}
-
 			}
 		}
 		
-		public Map<NodePair, Node> getLCAs(List<int[]> suffixPosPairs) {
+		// this method does not modify the state of LongestCommonPrefix class,
+		// so can be used in parallel from different threads (each will have
+		// its own result)
+		public Result preprocess(Collection<int[]> suffixPosPairs) {
+			Map<Node, NodeData> dataMap = new HashMap<Node, NodeData>(
+					depthMap.size());
+			for (Node node : depthMap.keySet())
+				dataMap.put(node, new NodeData());
 			Node[] firstSuffixTable = suffixTable.get(0);
 			Node[] secondSuffixTable = suffixTable.get(1);
 			for (int[] suffixPosPair : suffixPosPairs) {
@@ -95,22 +128,37 @@ public class TestLongestPalindrome {
 				dataMap.get(secondNode).secondNodes.add(firstNode);
 			}
 			
-			Map<NodePair, Node> lcaMap = new HashMap<NodePair, Node>();
+			Map<LCAQuery, Node> lcaMap = new HashMap<LCAQuery, Node>(
+					suffixPosPairs.size()); // preallocate the right size
 			tarjanOfflineLCA(root, dataMap, lcaMap);
-			return lcaMap;
+			return new Result(lcaMap);
+		}
+		
+		/**
+		 * Proxy which returns preprocessed results in O(1) time.
+		 */
+		public class Result {
+			private final Map<LCAQuery, Node> lcaMap;
+			Result(Map<LCAQuery, Node> lcaMap) { this.lcaMap = lcaMap; }
+			public int get(int[] suffixPos) {
+				// can be extended to work with many nodes 					
+				Node[] nodes = new Node[2];
+				for (int i = 0; i < nodes.length; ++i)
+				  nodes[i] = suffixTable.get(i)[suffixPos[i]];
+				Node lca = lcaMap.get(new LCAQuery(nodes[0], nodes[1]));
+				return depthMap.get(lca);
+			}
 		}
 		
 		private static class NodeData {
-			DisjointSetNode ds;
 			boolean black;
-			List<Node> secondNodes;
-			int depth;
+			DisjointSetNode ds;
+			List<Node> secondNodes = new ArrayList<Node>();
 		}
 		
-		// Node[2] is more memory (has length)
-		public static final class NodePair {
-			final Node first, second;
-			public NodePair(Node first, Node second) {
+		private static final class LCAQuery {
+			final Node first, second; // Node[2] is more memory (has length)
+			public LCAQuery(Node first, Node second) {
 				this.first = first;
 				this.second = second;
 			}
@@ -120,7 +168,7 @@ public class TestLongestPalindrome {
 			}
 			@Override
 			public boolean equals(Object obj) {
-				NodePair other = (NodePair) obj;
+				LCAQuery other = (LCAQuery) obj;
 				return (first == other.first && second == other.second ||
 						first == other.second && second == other.first);
 			}
@@ -128,7 +176,7 @@ public class TestLongestPalindrome {
 		
 		private static void tarjanOfflineLCA(Node u,
 				Map<Node, NodeData> dataMap,
-				Map<NodePair, Node> lcaMap) {
+				Map<LCAQuery, Node> lcaMap) {
 			// This recursive version throws StackOverflowError for deep trees:
 //			DisjointSetNode uSet = new DisjointSetNode(u);
 //			TarjanOfflineData uData = dataMap.get(u);
@@ -136,8 +184,8 @@ public class TestLongestPalindrome {
 //			for (Node v : u.children) {
 //				if (v == null) continue;
 //				tarjanOfflineLCA(v, dataMap, lcaMap);
-//				DisjointSetNode.union(uSet, dataMap.get(v).ds);
-//				DisjointSetNode.find(uSet).ancestor = u;
+//				uSet.union(dataMap.get(v).ds);
+//				uSet.find().ancestor = u;
 //			}
 //			uData.black = true;
 //			for (Node v : uData.secondNodes) {
@@ -151,31 +199,28 @@ public class TestLongestPalindrome {
 			// So, we implement an iterative version:
 			// - we keep track of child index which was visited last
 			// - that way we can return to u after we visit each child
-			LinkedList<Node> uStack = new LinkedList<Node>();
-			LinkedList<Integer> childStack = new LinkedList<Integer>();
-			uStack.push(u);
-			childStack.push(-1); // -1 means no children is visited yet
+			ArrayDeque<NodeAndInt> stack = new ArrayDeque<NodeAndInt>();
+			stack.push(new NodeAndInt(u, -1)); // -1 means no children visited
 			
-			while (!uStack.isEmpty()) {
-				u = uStack.removeLast();
+			while (!stack.isEmpty()) {
+				NodeAndInt state = stack.pollFirst();
+				u = state.node; int vIndex = state.i;
 				NodeData uData = dataMap.get(u);
-				int childIndex = childStack.removeLast();
-				DisjointSetNode uSet;
-				if (childIndex < 0) {
-					uSet = (uData.ds = new DisjointSetNode(u));
+				if (vIndex < 0) {
+					uData.ds = new DisjointSetNode(u);
 				} else {
-					uSet = uData.ds;
-					DisjointSetNode vSet = dataMap.get(u.children[childIndex]).ds;
-					DisjointSetNode.union(uSet, vSet);
-					DisjointSetNode.find(uSet).ancestor = u;
+					DisjointSetNode uSet = uData.ds;
+					DisjointSetNode vSet = dataMap.get(u.children[vIndex]).ds;
+					uSet.union(vSet);
+					uSet.find().ancestor = u;
 				}
 				
 				boolean childrenVisited = true;
-				while (++childIndex < u.children.length) {
-					Node v = u.children[childIndex];
+				while (++vIndex < u.children.length) {
+					Node v = u.children[vIndex];
 					if (v == null) continue;
-					uStack.add(u); childStack.add(childIndex); // return to u
-					uStack.add(v); childStack.add(-1); // recurse on v
+					stack.addFirst(new NodeAndInt(u, vIndex)); // back to u
+					stack.addFirst(new NodeAndInt(v, -1)); // recurse on v
 					childrenVisited = false;
 					break;
 				}
@@ -186,8 +231,8 @@ public class TestLongestPalindrome {
 				for (Node v : uData.secondNodes) {
 					NodeData vData = dataMap.get(v);
 					if (vData.black) {
-						Node lca = DisjointSetNode.find(vData.ds).ancestor;
-						lcaMap.put(new NodePair(u, v), lca);
+						Node lca = vData.ds.find().ancestor;
+						lcaMap.put(new LCAQuery(u, v), lca);
 					}
 				}
 			}
@@ -204,9 +249,9 @@ public class TestLongestPalindrome {
 				this.ancestor = ancestor;
 			}
 			
-			static void union(DisjointSetNode x, DisjointSetNode y) {
-				DisjointSetNode xRoot = find(x);
-				DisjointSetNode yRoot = find(y);
+			void union(DisjointSetNode other) {
+				DisjointSetNode xRoot = find();
+				DisjointSetNode yRoot = other.find();
 				if (xRoot.rank < yRoot.rank)
 					xRoot.parent = yRoot;
 				else {
@@ -216,48 +261,34 @@ public class TestLongestPalindrome {
 				}
 			}
 			
-			static DisjointSetNode find(DisjointSetNode x) {
-				if (x.parent == x)
-					return x;
-				x.parent = find(x.parent); // relink to root
-				return x.parent; // return root
+			DisjointSetNode find() {
+				if (parent == this)
+					return this;
+				parent = parent.find(); // relink to root
+				return parent; // return root
 			}
-		}
-	
-		public int getLCADepth(int[] suffixPos,
-				// can be extended to work with many nodes 
-				Map<NodePair, Node> lcaMap) {
-			Node[] nodes = new Node[2];
-			for (int i = 0; i < nodes.length; ++i)
-			  nodes[i] = suffixTable.get(i)[suffixPos[i]];
-			Node lca = lcaMap.get(
-					new LongestCommonPrefix.NodePair(nodes[0], nodes[1]));
-			return dataMap.get(lca).depth;
 		}
 	}
 	
-	static String findLongestPalindrome(String s) {
+	public static String findLongestPalindrome(String s) {
 		int n = s.length();
 		int maxPaliLen = 0;
 		int[] fromAndTo = new int[]{0, 0};
-		List<int[]> lcaOddQuery = new ArrayList<int[]>(n);
-		List<int[]> lcaEvenQuery = new ArrayList<int[]>(n);
-		for (int i = 0; i < n; ++i) {
-			lcaOddQuery.add(new int[]{i, n - i - 1}); // precompute for odd
-			lcaEvenQuery.add(new int[]{i, n - i}); // precompute for even
-		}
-		
 		LongestCommonPrefix lcp = new LongestCommonPrefix(
 				s,
 				new StringBuilder(s).reverse().toString());
-		// TODO: lcp.preprocess(lcaQueries)
-		Map<LongestCommonPrefix.NodePair, Node> lcaOdd =
-				lcp.getLCAs(lcaOddQuery); // O(n)
-		Map<LongestCommonPrefix.NodePair, Node> lcaEven =
-				lcp.getLCAs(lcaEvenQuery); // O(n)
+
+		// O(n) preprocessing
+		List<int[]> lcpQueries = new ArrayList<int[]>(2 * n);
+		for (int i = 0; i < n; ++i) {
+			lcpQueries.add(new int[]{i, n - i - 1}); // precompute for odd
+			lcpQueries.add(new int[]{i, n - i}); // precompute for even
+		}
+		LongestCommonPrefix.Result lcpResult = lcp.preprocess(lcpQueries); 
+
 		for (int i = 0; i < n; ++i) {
 			// check for odd-length palindrome centered at pos i in O(1)
-			int k = lcp.getLCADepth(lcaOddQuery.get(i), lcaOdd);
+			int k = lcpResult.get(lcpQueries.get(2 * i));
 			int paliLen = 2 * k - 1;
 			if (paliLen > maxPaliLen) {
 				maxPaliLen = paliLen;
@@ -265,7 +296,7 @@ public class TestLongestPalindrome {
 				fromAndTo[1] = i + k;
 			}
 			// check for even-length palindrome centered at pos i in O(1)
-			k = lcp.getLCADepth(lcaEvenQuery.get(i), lcaEven);
+			k = lcpResult.get(lcpQueries.get(2 * i + 1));
 			paliLen = 2 * k;
 			if (paliLen > maxPaliLen) {
 				maxPaliLen = paliLen;
@@ -277,6 +308,19 @@ public class TestLongestPalindrome {
 	}
 	
 	// TEST CASES
+	
+	@Test
+	public void testLongestCommonPrefix() {
+		LongestCommonPrefix lcp = new LongestCommonPrefix("acgat", "cgt");
+		 int[][] lcpQueries = new int[][]{
+		      {1, 0}, // get common prefix length of "cgat" and "cgt"
+		      {2, 1}, // get common prefix length of "gat" and "gt"
+		  };
+		  LongestCommonPrefix.Result lcpResult = lcp.preprocess(
+				  Arrays.asList(lcpQueries));
+		  assertEquals(2, lcpResult.get(lcpQueries[0])); // "cg"
+		  assertEquals(1, lcpResult.get(lcpQueries[1])) ;// "c"
+	}
 	
 	private static void assertLongestPali(String s, String expLongestPali) {
 		//assert false, true : prevent the repetition
